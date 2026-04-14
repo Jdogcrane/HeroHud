@@ -62,46 +62,55 @@ public interface HeroHudConfig extends Config
 	@Range(min = 1, max = 100)
 	default int staminaMaxThreshold() { return 99; }
 
-	@ConfigItem(keyName = "staminaShowValue", name = "Show Value Text", description = "Show the number", position = 9, section = staminaSection)
+	@ConfigItem(keyName = "staminaEffectiveStamina", name = "Show Effective Stamina", description = "Factors in weight and agility for the wheel layers", position = 9, section = staminaSection)
+	default boolean staminaEffectiveStamina() { return true; }
+
+	@ConfigItem(keyName = "staminaShowRecoveryPulser", name = "Show Recovery Pulser", description = "Show the circling indicator when recovering stamina", position = 10, section = staminaSection)
+	default boolean staminaShowRecoveryPulser() { return true; }
+
+	@ConfigItem(keyName = "staminaShowDepletionPulser", name = "Show Depletion Pulser", description = "Show the circling indicator when losing stamina", position = 11, section = staminaSection)
+	default boolean staminaShowDepletionPulser() { return true; }
+
+	@ConfigItem(keyName = "staminaShowValue", name = "Show Value Text", description = "Show the number", position = 12, section = staminaSection)
 	default boolean staminaShowValue() { return false; }
 
-	@ConfigItem(keyName = "staminaShowPercentage", name = "Show as Percentage", description = "Add % symbol", position = 10, section = staminaSection)
+	@ConfigItem(keyName = "staminaShowPercentage", name = "Show as Percentage", description = "Add % symbol", position = 13, section = staminaSection)
 	default boolean staminaShowPercentage() { return true; }
 
-	@ConfigItem(keyName = "staminaColor", name = "Fill Color", description = "", position = 11, section = staminaSection)
+	@ConfigItem(keyName = "staminaColor", name = "Fill Color", description = "", position = 14, section = staminaSection)
 	default Color staminaColor() { return Color.decode("#FFE229"); }
 
-	@ConfigItem(keyName = "staminaOpacity", name = "Fill Opacity", description = "0-255", position = 12, section = staminaSection)
+	@ConfigItem(keyName = "staminaOpacity", name = "Fill Opacity", description = "0-255", position = 15, section = staminaSection)
 	@Range(max = 255)
 	default int staminaOpacity() { return 255; }
 
-	@ConfigItem(keyName = "staminaBgColor", name = "Bg Color", description = "", position = 13, section = staminaSection)
+	@ConfigItem(keyName = "staminaBgColor", name = "Bg Color", description = "", position = 16, section = staminaSection)
 	default Color staminaBgColor() { return Color.decode("#000000"); }
 
-	@ConfigItem(keyName = "staminaBgOpacity", name = "Bg Opacity", description = "0-255", position = 14, section = staminaSection)
+	@ConfigItem(keyName = "staminaBgOpacity", name = "Bg Opacity", description = "0-255", position = 17, section = staminaSection)
 	@Range(max = 255)
 	default int staminaBgOpacity() { return 50; }
 
-	@ConfigItem(keyName = "staminaShowBorder", name = "Show Border", description = "", position = 15, section = staminaSection)
+	@ConfigItem(keyName = "staminaShowBorder", name = "Show Border", description = "", position = 18, section = staminaSection)
 	default boolean staminaShowBorder() { return false; }
 
-	@ConfigItem(keyName = "staminaBorderThickness", name = "Border Thick", description = "", position = 16, section = staminaSection)
+	@ConfigItem(keyName = "staminaBorderThickness", name = "Border Thick", description = "", position = 19, section = staminaSection)
 	@Range(min = 1, max = 10)
 	default int staminaBorderThickness() { return 1; }
 
-	@ConfigItem(keyName = "staminaWheelThickness", name = "Wheel Thickness", description = "Only for Wheel style", position = 17, section = staminaSection)
+	@ConfigItem(keyName = "staminaWheelThickness", name = "Wheel Thickness", description = "Only for Wheel style", position = 20, section = staminaSection)
 	@Range(min = 1, max = 20)
-	default int staminaWheelThickness() { return 4; }
+	default int staminaWheelThickness() { return 5; }
 
-	@ConfigItem(keyName = "staminaSize", name = "Size", description = "", position = 18, section = staminaSection)
+	@ConfigItem(keyName = "staminaSize", name = "Size", description = "", position = 21, section = staminaSection)
 	@Range(min = 10, max = 150)
-	default int staminaSize() { return 15; }
+	default int staminaSize() { return 20; }
 
-	@ConfigItem(keyName = "staminaAnchorX", name = "Anchor X Override", description = "Used if position is Custom", position = 19, section = staminaSection)
+	@ConfigItem(keyName = "staminaAnchorX", name = "Anchor X Override", description = "Used if position is Custom", position = 22, section = staminaSection)
 	@Range(min = -300, max = 300)
 	default int staminaAnchorX() { return 0; }
 
-	@ConfigItem(keyName = "staminaAnchorY", name = "Anchor Y Override", description = "Used if position is Custom", position = 20, section = staminaSection)
+	@ConfigItem(keyName = "staminaAnchorY", name = "Anchor Y Override", description = "Used if position is Custom", position = 23, section = staminaSection)
 	@Range(min = -300, max = 300)
 	default int staminaAnchorY() { return 0; }
 

@@ -7,8 +7,8 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public enum HudPosition
 {
-	LEFT_SHOULDER("Left Shoulder", -20, 10),
-	RIGHT_SHOULDER("Right Shoulder", 20, 10),
+	LEFT_SHOULDER("Left Shoulder", -35, 10),
+	RIGHT_SHOULDER("Right Shoulder", 35, 10),
 	TOP("Top", 0, -5),
 	CUSTOM("Custom", 0, 0);
 
