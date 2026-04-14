@@ -5,9 +5,9 @@ import lombok.Getter;
 
 @Getter
 @AllArgsConstructor
-public enum StaminaStyle
+public enum Style
 {
-	WHEEL("Zelda Wheel"),
+	WHEEL("Wheel"),
 	BAR("Horizontal Bar"),
 	VERTICAL_BAR("Vertical Bar"),
 	PERCENTAGE("Percentage Only"),
