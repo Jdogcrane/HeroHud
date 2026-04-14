@@ -53,8 +53,8 @@ public class HeroHudOverlay extends Overlay
 	private long lastPrayerChange = 0;
 
 	private int lastEnergy = -1;
-	private int lastHealth = -1;
-	private int lastPrayer = -1;
+	private int lastHealthValue = -1;
+	private int lastPrayerValue = -1;
 	private long lastEnergyDecreaseTime = 0;
 	private long lastCombatTime = 0;
 
@@ -156,7 +156,7 @@ public class HeroHudOverlay extends Overlay
 		boolean isRecentlyInCombat = (now - lastCombatTime) < 2000;
 
 		int energy = client.getEnergy();
-		float currentEnergyPercent = (energy > 100) ? energy / 100f : (float) energy;
+		float currentEnergyPercent = energy / 100f;
 
 		if (lastEnergy != -1 && energy < lastEnergy)
 		{
@@ -193,38 +193,88 @@ public class HeroHudOverlay extends Overlay
 		// --- Stamina ---
 		if (config.showStamina())
 		{
-			boolean active;
-			boolean timedOut;
+			VisibilityMode mode = config.staminaVisibilityMode();
+			boolean active = false;
+			boolean timedOut = false;
+			boolean alwaysShowOverride = false;
 
-			if (config.staminaOnlyCombat())
+			switch (mode)
 			{
-				active = isRecentlyInCombat;
-				timedOut = false;
-			}
-			else
-			{
-				active = (currentEnergyPercent >= config.staminaMinThreshold() && currentEnergyPercent <= config.staminaMaxThreshold())
-					|| client.getVarbitValue(Varbits.STAMINA_EFFECT) > 0;
-				if (config.staminaHideWalking() && !isRunning) active = false;
-				timedOut = config.staminaInactivityTimer() > 0 && (now - lastStaminaChange) > (config.staminaInactivityTimer() * 1000L);
+				case ALWAYS_SHOW:
+					active = true;
+					alwaysShowOverride = true;
+					break;
+				case SHOW_IN_COMBAT:
+					active = isRecentlyInCombat;
+					break;
+				case HIDE_IN_COMBAT:
+					if (isRecentlyInCombat)
+					{
+						active = false;
+					}
+					else
+					{
+						active = (currentEnergyPercent >= config.staminaMinThreshold() && currentEnergyPercent <= config.staminaMaxThreshold())
+							|| client.getVarbitValue(Varbits.STAMINA_EFFECT) > 0;
+						if (config.staminaHideWalking() && !isRunning) active = false;
+						timedOut = config.staminaInactivityTimer() > 0 && (now - lastStaminaChange) > (config.staminaInactivityTimer() * 1000L);
+					}
+					break;
+				case UNSET:
+				default:
+					active = (currentEnergyPercent >= config.staminaMinThreshold() && currentEnergyPercent <= config.staminaMaxThreshold())
+						|| client.getVarbitValue(Varbits.STAMINA_EFFECT) > 0;
+					if (config.staminaHideWalking() && !isRunning) active = false;
+					timedOut = config.staminaInactivityTimer() > 0 && (now - lastStaminaChange) > (config.staminaInactivityTimer() * 1000L);
+					break;
 			}
 
-			staminaAlpha = updateAlpha(staminaAlpha, active && !timedOut, config.staminaAlwaysShow());
+			staminaAlpha = updateAlpha(staminaAlpha, active && !timedOut, alwaysShowOverride);
 			
+			int offsetX = config.staminaPosition().getX() + config.staminaAnchorX();
+			int offsetY = config.staminaPosition().getY() + config.staminaAnchorY();
+			float sprintMultiplier = calculateSprintMultiplier();
+			updatePulserProgress(isRunning, currentEnergyPercent);
+
 			if (staminaAlpha > 0.01f)
 			{
-				String text = config.staminaShowValue() ? ((int)currentEnergyPercent + (config.staminaShowPercentage() ? "%" : "")) : "";
-				int offsetX = config.staminaPosition().getX() + config.staminaAnchorX();
-				int offsetY = config.staminaPosition().getY() + config.staminaAnchorY();
+				Color staminaColor = config.staminaColor();
+				if (config.staminaDynamicColor())
+				{
+					staminaColor = getDynamicColor(staminaColor, currentEnergyPercent, 50f);
+				}
 
-				float sprintMultiplier = calculateSprintMultiplier();
-				updatePulserProgress(isRunning, currentEnergyPercent);
+				String text = config.staminaShowValue() ? String.valueOf((int)currentEnergyPercent) : "";
+				
+				// Only show main pulser if not using 'hide when walking' logic (meaning we aren't hiding it while recovering)
+				// OR if Always Show is enabled (meaning the main HUD is consistently visible).
+				boolean allowMainPulser = (mode == VisibilityMode.ALWAYS_SHOW) || !(config.staminaHideWalking() && !isRunning);
 
-				renderStaminaHUD(graphics, localPlayer, currentEnergyPercent, trailingEnergy, config.staminaStyle(), config.staminaColor(),
+				renderStaminaHUD(graphics, localPlayer, currentEnergyPercent, trailingEnergy, config.staminaStyle(), staminaColor,
 					config.staminaOpacity(), config.staminaBgColor(), config.staminaBgOpacity(), 
 					config.staminaSize(), offsetX, offsetY, 
 					scaleFactor, client.getVarbitValue(Varbits.STAMINA_EFFECT), staminaAlpha, text,
-					config.staminaShowBorder(), config.staminaBorderThickness(), config.staminaWheelThickness(), pulserProgress, sprintMultiplier, isRunning);
+					config.staminaShowBorder(), config.staminaBorderThickness(), config.staminaWheelThickness(), pulserProgress, sprintMultiplier, isRunning, allowMainPulser, config.staminaPosition());
+			}
+			else if (config.staminaShowRecoveryHidden() && !isRunning && energy < 10000)
+			{
+				Color recoveryColor = config.staminaColor();
+				if (config.staminaDynamicColor())
+				{
+					recoveryColor = getDynamicColor(recoveryColor, currentEnergyPercent, 50f);
+				}
+				
+				float recoveryAlpha = 1.0f;
+				long stopTime = lastEnergyDecreaseTime + 2000; // end of 'isRunning' grace period
+				long fadeStartTime = stopTime + 3000;
+				if (now > fadeStartTime)
+				{
+					float fadeTarget = config.staminaRecoveryFade() / 255.0f;
+					recoveryAlpha = Math.max(fadeTarget, 1.0f - (float)(now - fadeStartTime) / 1000.0f);
+				}
+
+				renderRecoveryOnly(graphics, localPlayer, config.staminaRecoveryStyle(), recoveryColor, (int)(config.staminaOpacity() * recoveryAlpha),
+					config.staminaSize(), offsetX, offsetY, scaleFactor, pulserProgress, config.staminaRecoveryScale() / 100f, currentEnergyPercent / 100f, isRunning);
 			}
 		}
 
@@ -232,9 +282,9 @@ public class HeroHudOverlay extends Overlay
 		if (config.showHealth())
 		{
 			int hp = client.getBoostedSkillLevel(Skill.HITPOINTS);
-			int maxHp = client.getRealSkillLevel(Skill.HITPOINTS);
-			boolean valueChanged = lastHealth != -1 && hp != lastHealth;
-			if (valueChanged) { lastHealthChange = now; lastHealth = hp; }
+			int maxHp = Math.max(1, client.getRealSkillLevel(Skill.HITPOINTS));
+			if (lastHealthValue != -1 && hp != lastHealthValue) { lastHealthChange = now; }
+			lastHealthValue = hp;
 			float percent = (float) hp / maxHp * 100f;
 
 			boolean active;
@@ -254,17 +304,23 @@ public class HeroHudOverlay extends Overlay
 
 			healthAlpha = updateAlpha(healthAlpha, active && !timedOut, config.healthAlwaysShow());
 
+			int offsetX = config.healthPosition().getX() + config.healthAnchorX();
+			int offsetY = config.healthPosition().getY() + config.healthAnchorY();
+
 			if (healthAlpha > 0.01f)
 			{
-				String text = config.healthShowValue() ? String.valueOf(hp) : "";
-				int offsetX = config.healthPosition().getX() + config.healthAnchorX();
-				int offsetY = config.healthPosition().getY() + config.healthAnchorY();
+				Color healthColor = config.healthColor();
+				if (config.healthDynamicColor())
+				{
+					healthColor = getDynamicColor(healthColor, percent, 100f);
+				}
 
-				renderHUD(graphics, localPlayer, percent, config.healthStyle(), config.healthColor(), 
+				String text = config.healthShowValue() ? String.valueOf(hp) : "";
+				renderHUD(graphics, localPlayer, percent, config.healthStyle(), healthColor, 
 					config.healthOpacity(), config.healthBgColor(), config.healthBgOpacity(), 
 					config.healthSize(), offsetX, offsetY, 
 					scaleFactor, 0, healthAlpha, text, 
-					config.healthShowBorder(), config.healthBorderThickness(), config.healthWheelThickness());
+					config.healthShowBorder(), config.healthBorderThickness(), config.healthWheelThickness(), pulserProgress, config.healthPosition());
 			}
 		}
 
@@ -272,9 +328,9 @@ public class HeroHudOverlay extends Overlay
 		if (config.showPrayer())
 		{
 			int prayer = client.getBoostedSkillLevel(Skill.PRAYER);
-			int maxPrayer = client.getRealSkillLevel(Skill.PRAYER);
-			boolean valueChanged = lastPrayer != -1 && prayer != lastPrayer;
-			if (valueChanged) { lastPrayerChange = now; lastPrayer = prayer; }
+			int maxPrayer = Math.max(1, client.getRealSkillLevel(Skill.PRAYER));
+			if (lastPrayerValue != -1 && prayer != lastPrayerValue) { lastPrayerChange = now; }
+			lastPrayerValue = prayer;
 			float percent = (float) prayer / maxPrayer * 100f;
 
 			boolean active;
@@ -299,17 +355,23 @@ public class HeroHudOverlay extends Overlay
 
 			prayerAlpha = updateAlpha(prayerAlpha, active && !timedOut, config.prayerAlwaysShow());
 
+			int offsetX = config.prayerPosition().getX() + config.prayerAnchorX();
+			int offsetY = config.prayerPosition().getY() + config.prayerAnchorY();
+
 			if (prayerAlpha > 0.01f)
 			{
-				String text = config.prayerShowValue() ? String.valueOf(prayer) : "";
-				int offsetX = config.prayerPosition().getX() + config.prayerAnchorX();
-				int offsetY = config.prayerPosition().getY() + config.prayerAnchorY();
+				Color prayerColor = config.prayerColor();
+				if (config.prayerDynamicColor())
+				{
+					prayerColor = getDynamicColor(prayerColor, percent, 100f);
+				}
 
-				renderHUD(graphics, localPlayer, percent, config.prayerStyle(), config.prayerColor(), 
+				String text = config.prayerShowValue() ? String.valueOf(prayer) : "";
+				renderHUD(graphics, localPlayer, percent, config.prayerStyle(), prayerColor, 
 					config.prayerOpacity(), config.prayerBgColor(), config.prayerBgOpacity(), 
 					config.prayerSize(), offsetX, offsetY, 
 					scaleFactor, 0, prayerAlpha, text, 
-					config.prayerShowBorder(), config.prayerBorderThickness(), config.prayerWheelThickness());
+					config.prayerShowBorder(), config.prayerBorderThickness(), config.prayerWheelThickness(), pulserProgress, config.prayerPosition());
 			}
 		}
 
@@ -405,12 +467,6 @@ public class HeroHudOverlay extends Overlay
 		if (running)
 		{
 			nextHighestRunEnergyMark = 0;
-			if (currentEnergyPercent <= 0)
-			{
-				pulserProgress = 0;
-				return;
-			}
-
 			currentPulseDuration = calculateExpectedDuration(true);
 			pulserProgress += (float) deltaTime / currentPulseDuration;
 			if (pulserProgress >= 1.0f)
@@ -435,7 +491,7 @@ public class HeroHudOverlay extends Overlay
 				int boost = getGracefulRecoveryBoost();
 				double rawRegen = Math.floor((1 + (boost / 100.0d)) * (Math.floor(agility / 10.0d) + 15));
 
-				ticksToRunEnergyRegen = (int) Math.ceil((nextHighestRunEnergyMark - energy) / rawRegen);
+				ticksToRunEnergyRegen = (int) Math.ceil((nextHighestRunEnergyMark - energy) / Math.max(1, rawRegen));
 				millisecondsToRunEnergyRegen = ticksToRunEnergyRegen * 600L;
 				millisecondsSinceRunEnergyRegen = 0;
 			}
@@ -443,7 +499,9 @@ public class HeroHudOverlay extends Overlay
 			if (millisecondsToRunEnergyRegen > 0)
 			{
 				millisecondsSinceRunEnergyRegen += deltaTime;
-				pulserProgress = Math.min(1.0f, (float) millisecondsSinceRunEnergyRegen / millisecondsToRunEnergyRegen);
+				float target = Math.min(1.0f, (float) millisecondsSinceRunEnergyRegen / millisecondsToRunEnergyRegen);
+				// Small smoothing lerp to avoid jitter
+				pulserProgress = pulserProgress + (target - pulserProgress) * 0.15f;
 			}
 			else
 			{
@@ -472,14 +530,124 @@ public class HeroHudOverlay extends Overlay
 		return current;
 	}
 
-	private void renderStaminaHUD(Graphics2D graphics, Player player, float percent, float trailingPercent, Style style, Color color, int opacity, Color bgColor, int bgOpacity, int baseSize, int offsetX, int offsetY, float scaleFactor, int varbit, float alpha, String text, boolean showBorder, int borderThick, int wheelThick, float energyChangeProgress, float sprintMultiplier, boolean isRunning)
+	private void renderRecoveryOnly(Graphics2D graphics, Player player, RecoveryStyle style, Color color, int opacity, int baseSize, int offsetX, int offsetY, float scaleFactor, float recoveryProgress, float customScale, float staminaPercent, boolean isRunning)
+	{
+		float size = baseSize * scaleFactor * customScale;
+		Point loc = player.getCanvasTextLocation(graphics, "", player.getLogicalHeight());
+		if (loc == null) return;
+
+		// Use floating point coordinates to prevent jittering when zooming
+		float lx = (float)loc.getX();
+		float ly = (float)loc.getY();
+		float x = lx + offsetX * scaleFactor;
+		float y = ly + offsetY * scaleFactor;
+
+		Color c = new Color(color.getRed(), color.getGreen(), color.getBlue(), opacity);
+		Color pulserColor = isRunning ? new Color(255, 0, 0, opacity) : new Color(0, 255, 0, opacity);
+		Color bgC = new Color(0, 0, 0, (int)(opacity * 0.4f));
+
+		graphics.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+		graphics.setRenderingHint(RenderingHints.KEY_STROKE_CONTROL, RenderingHints.VALUE_STROKE_PURE);
+
+		switch (style)
+		{
+			case SPHERE:
+				// Sphere representing total stamina pool - slightly smaller for a gap
+				float currentSphereSize = size * 0.75f * staminaPercent;
+				graphics.setColor(c);
+				graphics.fill(new Ellipse2D.Float(x - currentSphereSize/2f, y - currentSphereSize/2f, currentSphereSize, currentSphereSize));
+
+				// Spinner representing recovery progress around it
+				if (recoveryProgress > 0)
+				{
+					graphics.setColor(pulserColor);
+					graphics.setStroke(new BasicStroke(1.5f * scaleFactor));
+					graphics.draw(new Arc2D.Float(x - size/2f, y - size/2f, size, size, 90, -360 * recoveryProgress, Arc2D.OPEN));
+				}
+				break;
+			case PIE_SPINNER:
+				// Pie representing total stamina pool - slightly smaller for a gap
+				float pieSize = size * 0.75f;
+				graphics.setColor(bgC);
+				graphics.fill(new Ellipse2D.Float(x - pieSize/2f, y - pieSize/2f, pieSize, pieSize));
+				graphics.setColor(c);
+				graphics.fill(new Arc2D.Float(x - pieSize/2f, y - pieSize/2f, pieSize, pieSize, 90, -360 * staminaPercent, Arc2D.PIE));
+
+				// Spinner representing recovery progress around it
+				if (recoveryProgress > 0)
+				{
+					graphics.setColor(pulserColor);
+					graphics.setStroke(new BasicStroke(1.5f * scaleFactor));
+					graphics.draw(new Arc2D.Float(x - size/2f, y - size/2f, size, size, 90, -360 * recoveryProgress, Arc2D.OPEN));
+				}
+				break;
+			case ORB:
+				float orbSize = size * 0.8f;
+				float orbGap = size * 0.2f;
+				
+				// Stamina Pool Orb (Left)
+				float ox1 = x - orbSize - orbGap/2f;
+				graphics.setColor(bgC);
+				graphics.fill(new Ellipse2D.Float(ox1, y - orbSize/2f, orbSize, orbSize));
+				Shape oldClip1 = graphics.getClip();
+				graphics.setClip(new Ellipse2D.Float(ox1, y - orbSize/2f, orbSize, orbSize));
+				graphics.setColor(c);
+				float fh1 = orbSize * staminaPercent;
+				graphics.fill(new Rectangle2D.Float(ox1, y + orbSize/2f - fh1, orbSize, fh1));
+				graphics.setClip(oldClip1);
+
+				// Recovery Orb (Right)
+				float ox2 = x + orbGap/2f;
+				graphics.setColor(bgC);
+				graphics.fill(new Ellipse2D.Float(ox2, y - orbSize/2f, orbSize, orbSize));
+				Shape oldClip2 = graphics.getClip();
+				graphics.setClip(new Ellipse2D.Float(ox2, y - orbSize/2f, orbSize, orbSize));
+				graphics.setColor(pulserColor);
+				float fh2 = orbSize * recoveryProgress;
+				graphics.fill(new Rectangle2D.Float(ox2, y + orbSize/2f - fh2, orbSize, fh2));
+				graphics.setClip(oldClip2);
+				break;
+			case BAR:
+				float bw = size * 1.5f, bh = size * 0.3f;
+				float bGap = size * 0.15f;
+				// Stamina Pool Bar (Top)
+				graphics.setColor(bgC);
+				graphics.fill(new Rectangle2D.Float(x - bw/2f, y - bh - bGap/2f, bw, bh));
+				graphics.setColor(c);
+				graphics.fill(new Rectangle2D.Float(x - bw/2f, y - bh - bGap/2f, bw * staminaPercent, bh));
+
+				// Recovery Bar (Bottom)
+				graphics.setColor(bgC);
+				graphics.fill(new Rectangle2D.Float(x - bw/2f, y + bGap/2f, bw, bh));
+				graphics.setColor(pulserColor);
+				graphics.fill(new Rectangle2D.Float(x - bw/2f, y + bGap/2f, bw * recoveryProgress, bh));
+				break;
+			case VERTICAL_BAR:
+				float vbw = size * 0.3f, vbh = size * 1.5f;
+				float vbGap = size * 0.15f;
+				// Stamina Pool Bar (Left)
+				graphics.setColor(bgC);
+				graphics.fill(new Rectangle2D.Float(x - vbw - vbGap/2f, y - vbh/2f, vbw, vbh));
+				graphics.setColor(c);
+				graphics.fill(new Rectangle2D.Float(x - vbw - vbGap/2f, y + vbh/2f - vbh * staminaPercent, vbw, vbh * staminaPercent));
+
+				// Recovery Bar (Right)
+				graphics.setColor(bgC);
+				graphics.fill(new Rectangle2D.Float(x + vbGap/2f, y - vbh/2f, vbw, vbh));
+				graphics.setColor(pulserColor);
+				graphics.fill(new Rectangle2D.Float(x + vbGap/2f, y + vbh/2f - vbh * recoveryProgress, vbw, vbh * recoveryProgress));
+				break;
+		}
+	}
+
+	private void renderStaminaHUD(Graphics2D graphics, Player player, float percent, float trailingPercent, Style style, Color color, int opacity, Color bgColor, int bgOpacity, int baseSize, int offsetX, int offsetY, float scaleFactor, int varbit, float alpha, String text, boolean showBorder, int borderThick, int wheelThick, float energyChangeProgress, float sprintMultiplier, boolean isRunning, boolean allowPulser, HudPosition pos)
 	{
 		float size = baseSize * scaleFactor;
 		Point loc = player.getCanvasTextLocation(graphics, "", player.getLogicalHeight());
 		if (loc == null) return;
 
-		float x = loc.getX() + offsetX * scaleFactor;
-		float y = loc.getY() + offsetY * scaleFactor;
+		float x = (float)loc.getX() + offsetX * scaleFactor;
+		float y = (float)loc.getY() + offsetY * scaleFactor;
 
 		float fillPercent = Math.max(0, Math.min(1.0f, percent / 100.0f));
 		float trailPercent = Math.max(0, Math.min(1.0f, trailingPercent / 100.0f));
@@ -495,11 +663,11 @@ public class HeroHudOverlay extends Overlay
 
 		if (style == Style.WHEEL)
 		{
-			renderStaminaWheel(graphics, x, y, fillPercent, trailPercent, varbit, size, fillC, bgC, trailC, showBorder, borderThick, wheelThick * scaleFactor, energyChangeProgress, sprintMultiplier, isRunning);
+			renderStaminaWheel(graphics, x, y, fillPercent, trailPercent, varbit, size, fillC, bgC, trailC, showBorder, borderThick, wheelThick * scaleFactor, energyChangeProgress, sprintMultiplier, isRunning, allowPulser, opacity);
 		}
 		else
 		{
-			renderHUD(graphics, player, percent, style, color, opacity, bgColor, bgOpacity, baseSize, offsetX, offsetY, scaleFactor, varbit, alpha, text, showBorder, borderThick, wheelThick);
+			renderHUD(graphics, player, percent, style, color, opacity, bgColor, bgOpacity, baseSize, offsetX, offsetY, scaleFactor, varbit, alpha, text, showBorder, borderThick, wheelThick, energyChangeProgress, pos);
 		}
 		
 		if (style != Style.PERCENTAGE && !text.isEmpty())
@@ -510,7 +678,7 @@ public class HeroHudOverlay extends Overlay
 		graphics.setComposite(oldComposite);
 	}
 
-	private void renderStaminaWheel(Graphics2D graphics, float x, float y, float percent, float trailPercent, int varbit, float size, Color color, Color bg, Color trailColor, boolean showBorder, int borderThick, float wheelThick, float energyChangeProgress, float sprintMultiplier, boolean isRunning)
+	private void renderStaminaWheel(Graphics2D graphics, float x, float y, float percent, float trailPercent, int varbit, float size, Color color, Color bg, Color trailColor, boolean showBorder, int borderThick, float wheelThick, float energyChangeProgress, float sprintMultiplier, boolean isRunning, boolean allowPulser, int opacity)
 	{
 		float cx = x - size / 2f, cy = y - size / 2f;
 		graphics.setColor(bg);
@@ -523,6 +691,8 @@ public class HeroHudOverlay extends Overlay
 		int maxLayers = effective ? (int) Math.ceil(sprintMultiplier) : 1;
 		if (effective && sprintMultiplier < 1.0f) maxLayers = 1;
 
+		int highestVisibleLayer = 0;
+
 		for (int i = 0; i < maxLayers; i++)
 		{
 			float layerScale = 1.0f + (i * 0.4f);
@@ -531,22 +701,24 @@ public class HeroHudOverlay extends Overlay
 			float lWheelThick = (i == 0) ? wheelThick : (wheelThick * 0.6f);
 
 			float wheelFill = Math.max(0, Math.min(1.0f, visualPercent - i));
-			float trailFill = Math.max(0, Math.min(1.0f, visualTrail - i));
+			float lTrailFill = Math.max(0, Math.min(1.0f, visualTrail - i));
 
-			if (wheelFill <= 0 && trailFill <= 0) continue;
+			if (wheelFill <= 0 && lTrailFill <= 0) continue;
+			
+			highestVisibleLayer = i;
 
-			if (wheelFill > trailFill)
+			if (wheelFill > lTrailFill)
 			{
 				// Lead (Regen)
 				drawArc(graphics, lcx + lWheelThick / 2f, lcy + lWheelThick / 2f, layerSize - lWheelThick, wheelFill, color.brighter(), lWheelThick, true);
-				drawArc(graphics, lcx + lWheelThick / 2f, lcy + lWheelThick / 2f, layerSize - lWheelThick, trailFill, color, lWheelThick, true);
+				drawArc(graphics, lcx + lWheelThick / 2f, lcy + lWheelThick / 2f, layerSize - lWheelThick, lTrailFill, color, lWheelThick, true);
 			}
 			else
 			{
 				// Trail (Loss)
-				if (trailFill > wheelFill)
+				if (lTrailFill > wheelFill)
 				{
-					drawArc(graphics, lcx + lWheelThick / 2f, lcy + lWheelThick / 2f, layerSize - lWheelThick, trailFill, trailColor, lWheelThick, true);
+					drawArc(graphics, lcx + lWheelThick / 2f, lcy + lWheelThick / 2f, layerSize - lWheelThick, lTrailFill, trailColor, lWheelThick, true);
 				}
 				// Stamina
 				drawArc(graphics, lcx + lWheelThick / 2f, lcy + lWheelThick / 2f, layerSize - lWheelThick, wheelFill, color, lWheelThick, true);
@@ -567,14 +739,14 @@ public class HeroHudOverlay extends Overlay
 			}
 		}
 
-		float outerScale = 1.0f + ((maxLayers - 1) * 0.4f) + 0.18f;
+		float outerScale = 1.0f + (highestVisibleLayer * 0.4f) + 0.18f;
 		float outerSize = size * outerScale;
 		float ocx = x - outerSize / 2f, ocy = y - outerSize / 2f;
 
-		boolean showPulser = isRunning ? config.staminaShowDepletionPulser() : config.staminaShowRecoveryPulser();
+		boolean showPulser = allowPulser && (isRunning ? config.staminaShowDepletionPulser() : config.staminaShowRecoveryPulser());
 		if (energyChangeProgress > 0 && showPulser)
 		{
-			Color circlingColor = isRunning ? new Color(255, 60, 0, 180) : color.brighter();
+			Color circlingColor = isRunning ? new Color(255, 60, 0, opacity) : new Color(color.getRed(), color.getGreen(), color.getBlue(), opacity).brighter();
 			graphics.setColor(circlingColor);
 			graphics.setStroke(new BasicStroke(borderThick + 0.5f, BasicStroke.CAP_BUTT, BasicStroke.JOIN_ROUND));
 			float extent = isRunning ? 360 * energyChangeProgress : -360 * energyChangeProgress;
@@ -582,14 +754,14 @@ public class HeroHudOverlay extends Overlay
 		}
 	}
 
-	private void renderHUD(Graphics2D graphics, Player player, float percent, Style style, Color color, int opacity, Color bgColor, int bgOpacity, int baseSize, int offsetX, int offsetY, float scaleFactor, int varbit, float alpha, String text, boolean showBorder, int borderThick, int wheelThick)
+	private void renderHUD(Graphics2D graphics, Player player, float percent, Style style, Color color, int opacity, Color bgColor, int bgOpacity, int baseSize, int offsetX, int offsetY, float scaleFactor, int varbit, float alpha, String text, boolean showBorder, int borderThick, int wheelThick, float pulserProgress, HudPosition pos)
 	{
 		float size = baseSize * scaleFactor;
 		Point loc = player.getCanvasTextLocation(graphics, "", player.getLogicalHeight());
 		if (loc == null) return;
 
-		float x = loc.getX() + offsetX * scaleFactor;
-		float y = loc.getY() + offsetY * scaleFactor;
+		float x = (float)loc.getX() + offsetX * scaleFactor;
+		float y = (float)loc.getY() + offsetY * scaleFactor;
 
 		float fillPercent = Math.max(0, Math.min(1.0f, percent / 100.0f));
 		Color fillC = new Color(color.getRed(), color.getGreen(), color.getBlue(), opacity);
@@ -603,10 +775,10 @@ public class HeroHudOverlay extends Overlay
 		switch (style)
 		{
 			case WHEEL: renderWheel(graphics, x, y, fillPercent, varbit, size, fillC, bgC, showBorder, borderThick, wheelThick * scaleFactor); break;
-			case BAR: renderBar(graphics, x, y, fillPercent, size, fillC, bgC, false, showBorder, borderThick); break;
-			case VERTICAL_BAR: renderBar(graphics, x, y, fillPercent, size, fillC, bgC, true, showBorder, borderThick); break;
+			case BAR: renderBar(graphics, x, y, fillPercent, size, fillC, bgC, false, showBorder, borderThick, pulserProgress, pos); break;
+			case VERTICAL_BAR: renderBar(graphics, x, y, fillPercent, size, fillC, bgC, true, showBorder, borderThick, pulserProgress, pos); break;
 			case PERCENTAGE: renderText(graphics, x, y, text, size); break;
-			case PIE: renderPie(graphics, x, y, fillPercent, size, fillC, bgC, showBorder, borderThick); break;
+			case PIE: renderPie(graphics, x, y, fillPercent, size, fillC, bgC, showBorder, borderThick, pulserProgress); break;
 			case ORB: renderOrb(graphics, x, y, fillPercent, size, fillC, bgC, showBorder, borderThick); break;
 		}
 		
@@ -641,7 +813,7 @@ public class HeroHudOverlay extends Overlay
 		}
 	}
 
-	private void renderBar(Graphics2D graphics, float x, float y, float percent, float size, Color color, Color bg, boolean vertical, boolean showBorder, int borderThick)
+	private void renderBar(Graphics2D graphics, float x, float y, float percent, float size, Color color, Color bg, boolean vertical, boolean showBorder, int borderThick, float pulserProgress, HudPosition pos)
 	{
 		float w = vertical ? size / 2f : size * 2f, h = vertical ? size * 2f : size / 2f;
 		float sx = x - w / 2f, sy = y - h / 2f;
@@ -657,9 +829,28 @@ public class HeroHudOverlay extends Overlay
 			graphics.setStroke(new BasicStroke(borderThick));
 			graphics.draw(new Rectangle2D.Float(sx, sy, w, h));
 		}
+
+		// Pulser line
+		if (pulserProgress > 0)
+		{
+			graphics.setColor(color.brighter());
+			graphics.setStroke(new BasicStroke(1.5f));
+			if (vertical)
+			{
+				float px = (pos == HudPosition.LEFT_SHOULDER) ? sx - 3f : sx + w + 3f;
+				float py = sy + h * (1 - pulserProgress);
+				graphics.draw(new Rectangle2D.Float(px, py, 2f, 1f));
+			}
+			else
+			{
+				float px = sx + w * pulserProgress;
+				float py = sy - 3f;
+				graphics.draw(new Rectangle2D.Float(px, py, 1f, 2f));
+			}
+		}
 	}
 
-	private void renderPie(Graphics2D graphics, float x, float y, float percent, float size, Color color, Color bg, boolean showBorder, int borderThick)
+	private void renderPie(Graphics2D graphics, float x, float y, float percent, float size, Color color, Color bg, boolean showBorder, int borderThick, float pulserProgress)
 	{
 		float cx = x - size / 2f, cy = y - size / 2f;
 		graphics.setColor(bg);
@@ -671,6 +862,15 @@ public class HeroHudOverlay extends Overlay
 			graphics.setColor(Color.BLACK);
 			graphics.setStroke(new BasicStroke(borderThick));
 			graphics.draw(new Ellipse2D.Float(cx, cy, size, size));
+		}
+
+		if (pulserProgress > 0)
+		{
+			float outerSize = size + 4f;
+			float ocx = x - outerSize / 2f, ocy = y - outerSize / 2f;
+			graphics.setColor(color.brighter());
+			graphics.setStroke(new BasicStroke(1.5f));
+			graphics.draw(new Arc2D.Float(ocx, ocy, outerSize, outerSize, 90, -360 * pulserProgress, Arc2D.OPEN));
 		}
 	}
 
@@ -712,5 +912,36 @@ public class HeroHudOverlay extends Overlay
 		graphics.drawString(text, x - tw / 2f + 1, y + th / 2f - 1);
 		graphics.setColor(Color.WHITE);
 		graphics.drawString(text, x - tw / 2f, y + th / 2f - 2);
+	}
+
+	private Color getDynamicColor(Color baseColor, float percent, float threshold)
+	{
+		if (percent >= threshold) return baseColor;
+
+		// Convert original color to HSB to preserve its brightness (Value)
+		float[] hsb = Color.RGBtoHSB(baseColor.getRed(), baseColor.getGreen(), baseColor.getBlue(), null);
+		float originalBrightness = hsb[2];
+		float originalSaturation = hsb[1];
+
+		float targetHue;
+		if (percent <= 10f)
+		{
+			targetHue = 0f; // Red
+		}
+		else if (percent <= 30f)
+		{
+			// Interpolate Hue between Red (0) and Orange (0.08)
+			float t = (percent - 10f) / 20f;
+			targetHue = t * 0.08f;
+		}
+		else
+		{
+			// Interpolate Hue between Orange (0.08) and Yellow (0.16)
+			float t = (percent - 30f) / (threshold - 30f);
+			targetHue = 0.08f + t * (0.16f - 0.08f);
+		}
+
+		// Return the new color with shifted hue but original saturation/brightness
+		return Color.getHSBColor(targetHue, originalSaturation, originalBrightness);
 	}
 }
