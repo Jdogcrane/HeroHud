@@ -1,5 +1,6 @@
 package com.HeroHud;
 
+import com.google.common.collect.ImmutableSet;
 import java.awt.AlphaComposite;
 import java.awt.BasicStroke;
 import java.awt.Color;
@@ -13,11 +14,15 @@ import java.awt.Stroke;
 import java.awt.geom.Arc2D;
 import java.awt.geom.Ellipse2D;
 import java.awt.geom.Rectangle2D;
+import java.util.Arrays;
 import java.util.LinkedList;
 import java.util.Queue;
+import java.util.Set;
 import javax.inject.Inject;
+import lombok.Getter;
 import net.runelite.api.Actor;
 import net.runelite.api.Client;
+import net.runelite.api.EquipmentInventorySlot;
 import net.runelite.api.InventoryID;
 import net.runelite.api.Item;
 import net.runelite.api.ItemContainer;
@@ -27,7 +32,9 @@ import net.runelite.api.Player;
 import net.runelite.api.Point;
 import net.runelite.api.Skill;
 import net.runelite.api.Varbits;
+import net.runelite.api.gameval.ItemID;
 import net.runelite.client.game.ItemManager;
+import net.runelite.client.game.ItemVariationMapping;
 import net.runelite.client.ui.overlay.Overlay;
 import net.runelite.client.ui.overlay.OverlayLayer;
 import net.runelite.client.ui.overlay.OverlayPosition;
@@ -36,9 +43,8 @@ public class HeroHudOverlay extends Overlay
 {
 	private final Client client;
 	private final HeroHudConfig config;
-	private final ItemManager itemManager;
 
-	private float staminaAlpha = 0f;
+    private float staminaAlpha = 0f;
 	private float healthAlpha = 0f;
 	private float prayerAlpha = 0f;
 
@@ -56,19 +62,56 @@ public class HeroHudOverlay extends Overlay
 	private float trailingEnergy = -1f;
 	private int lastHistoryTick = -1;
 
-	private int lastEnergyValueForProgress = -1;
-	private boolean lastRunningForProgress = false;
-	private long lastEnergyChangeTimeForProgress = 0;
+	// Pulser state
+	private float pulserProgress = 0f;
+	private float currentPulseDuration = 2000f; 
+	private long lastPulseFrameTime = 0;
+	private boolean lastRunningState = false;
 
-	private static final float FADE_SPEED = 0.05f;
+	// Regen synchronization state
+	private int ticksToRunEnergyRegen = 0;
+	private long millisecondsToRunEnergyRegen = 0;
+	private long millisecondsSinceRunEnergyRegen = 0;
+	private int nextHighestRunEnergyMark = 0;
+
+	private static final float FADE_SPEED = 0.02f;
+
+	@Getter
+	private enum GracefulEquipmentSlot
+	{
+		HEAD(EquipmentInventorySlot.HEAD.getSlotIdx(), 3, ItemID.GRACEFUL_HOOD),
+		BODY(EquipmentInventorySlot.BODY.getSlotIdx(), 4, ItemID.GRACEFUL_TOP),
+		LEGS(EquipmentInventorySlot.LEGS.getSlotIdx(), 4, ItemID.GRACEFUL_LEGS),
+		GLOVES(EquipmentInventorySlot.GLOVES.getSlotIdx(), 3, ItemID.GRACEFUL_GLOVES),
+		BOOTS(EquipmentInventorySlot.BOOTS.getSlotIdx(), 3, ItemID.GRACEFUL_BOOTS),
+		CAPE(EquipmentInventorySlot.CAPE.getSlotIdx(), 3, ItemID.GRACEFUL_CAPE, ItemID.SKILLCAPE_AGILITY, ItemID.SKILLCAPE_AGILITY_TRIMMED_WORN, ItemID.SKILLCAPE_MAX);
+
+		private final int index;
+		private final int boost;
+		private final Set<Integer> items;
+
+		GracefulEquipmentSlot(int index, int boost, int... baseItems)
+		{
+			this.index = index;
+			this.boost = boost;
+
+			final ImmutableSet.Builder<Integer> itemsBuilder = ImmutableSet.builder();
+			for (int item : baseItems)
+			{
+				itemsBuilder.addAll(ItemVariationMapping.getVariations(item));
+			}
+			items = itemsBuilder.build();
+		}
+
+		private static final int TOTAL_BOOSTS = Arrays.stream(values()).mapToInt(GracefulEquipmentSlot::getBoost).sum();
+	}
 
 	@Inject
 	private HeroHudOverlay(Client client, HeroHudConfig config, ItemManager itemManager)
 	{
 		this.client = client;
 		this.config = config;
-		this.itemManager = itemManager;
-		setPosition(OverlayPosition.DYNAMIC);
+        setPosition(OverlayPosition.DYNAMIC);
 		setLayer(OverlayLayer.ABOVE_SCENE);
 	}
 
@@ -119,11 +162,20 @@ public class HeroHudOverlay extends Overlay
 		{
 			lastEnergyDecreaseTime = now;
 		}
-		boolean energyChanged = energy != lastEnergy;
 		boolean isRunning = (now - lastEnergyDecreaseTime) < 2000;
-		lastEnergy = energy;
 
-		// --- Energy History for Trail (Tick-synced) ---
+		// --- Pulser Duration Tracking ---
+		if (lastEnergy != -1 && energy != lastEnergy)
+		{
+			lastStaminaChange = now;
+		}
+		
+		if (isRunning != lastRunningState)
+		{
+			lastRunningState = isRunning;
+		}
+
+		// --- Energy History for Trail ---
 		if (currentTick != lastHistoryTick)
 		{
 			energyHistory.add(currentEnergyPercent);
@@ -141,8 +193,6 @@ public class HeroHudOverlay extends Overlay
 		// --- Stamina ---
 		if (config.showStamina())
 		{
-			if (energyChanged) { lastStaminaChange = now; }
-			
 			boolean active;
 			boolean timedOut;
 
@@ -168,13 +218,13 @@ public class HeroHudOverlay extends Overlay
 				int offsetY = config.staminaPosition().getY() + config.staminaAnchorY();
 
 				float sprintMultiplier = calculateSprintMultiplier();
-				float energyChangeProgress = calculateEnergyChangeProgress(isRunning, currentEnergyPercent);
+				updatePulserProgress(isRunning, currentEnergyPercent);
 
 				renderStaminaHUD(graphics, localPlayer, currentEnergyPercent, trailingEnergy, config.staminaStyle(), config.staminaColor(),
 					config.staminaOpacity(), config.staminaBgColor(), config.staminaBgOpacity(), 
 					config.staminaSize(), offsetX, offsetY, 
 					scaleFactor, client.getVarbitValue(Varbits.STAMINA_EFFECT), staminaAlpha, text,
-					config.staminaShowBorder(), config.staminaBorderThickness(), config.staminaWheelThickness(), energyChangeProgress, sprintMultiplier, isRunning);
+					config.staminaShowBorder(), config.staminaBorderThickness(), config.staminaWheelThickness(), pulserProgress, sprintMultiplier, isRunning);
 			}
 		}
 
@@ -263,6 +313,7 @@ public class HeroHudOverlay extends Overlay
 			}
 		}
 
+		lastEnergy = energy;
 		return null;
 	}
 
@@ -272,19 +323,13 @@ public class HeroHudOverlay extends Overlay
 		int weight = client.getWeight();
 		int clampedWeight = Math.max(0, Math.min(64, weight));
 
-		// UnitsLost = floor(60 + (67 * weight/64)) * (1 - agility/300)
 		float unitsLost = (float) Math.floor(60 + (67.0 * clampedWeight / 64.0)) * (1.0f - (agility / 300.0f));
-
-		// Baseline: 20kg weight
 		float baselineUnitsLost = (float) Math.floor(60 + (67.0 * 20.0 / 64.0)) * (1.0f - (agility / 300.0f));
 
 		float ratio = baselineUnitsLost / Math.max(1, unitsLost);
 
-		// User wants 0kg to be "double circle" (2.0) and 20kg to be "full ring" (1.0)
-		// At 0kg, actual ratio is ~80/60 = 1.33. We map this to 2.0.
 		if (ratio > 1.0f)
 		{
-			// Amplifying the efficiency to hit exactly 2.0 at 0kg (ratio ~1.33)
 			float unitsLostAt0 = 60.0f * (1.0f - (agility / 300.0f));
 			float maxRatio = baselineUnitsLost / Math.max(1, unitsLostAt0);
 			if (maxRatio > 1.0f)
@@ -296,18 +341,35 @@ public class HeroHudOverlay extends Overlay
 		return ratio;
 	}
 
-	private float calculateEnergyChangeProgress(boolean running, float currentEnergyPercent)
+	private int getGracefulRecoveryBoost()
 	{
-		int energyInt = (int) (currentEnergyPercent);
-		if (energyInt != lastEnergyValueForProgress || running != lastRunningForProgress)
+		final ItemContainer equipment = client.getItemContainer(InventoryID.EQUIPMENT);
+		if (equipment == null) return 0;
+
+		final Item[] items = equipment.getItems();
+		int boost = 0;
+
+		for (final GracefulEquipmentSlot slot : GracefulEquipmentSlot.values())
 		{
-			lastEnergyValueForProgress = energyInt;
-			lastRunningForProgress = running;
-			lastEnergyChangeTimeForProgress = System.currentTimeMillis();
+			if (items.length <= slot.getIndex()) continue;
+
+			final Item wornItem = items[slot.getIndex()];
+			if (wornItem != null && slot.getItems().contains(wornItem.getId()))
+			{
+				boost += slot.getBoost();
+			}
 		}
 
-		if (energyInt >= 100 && !running) return 0f;
+		if (boost == GracefulEquipmentSlot.TOTAL_BOOSTS)
+		{
+			boost += 10; // GRACEFUL_FULL_SET_BOOST_BONUS
+		}
 
+		return boost;
+	}
+
+	private float calculateExpectedDuration(boolean running)
+	{
 		float unitsPerTick;
 		if (running)
 		{
@@ -319,56 +381,75 @@ public class HeroHudOverlay extends Overlay
 		}
 		else
 		{
-			int agility = client.getRealSkillLevel(Skill.AGILITY);
-			float baseR = (float) (Math.floor(agility / 10.0) + 15);
-
-			int gracefulBonus = calculateGracefulBonus();
-			float multiplier = 1.0f + (gracefulBonus / 100.0f);
-			if (gracefulBonus >= 30) multiplier = 1.3f; // Full set is 30%
-
-			unitsPerTick = (float) Math.floor(baseR * multiplier);
+			double rawRunEnergyRegenPerTick = Math.floor((1 + (getGracefulRecoveryBoost() / 100.0d)) * (Math.floor(client.getBoostedSkillLevel(Skill.AGILITY) / 10.0d) + 15));
+			unitsPerTick = (float) rawRunEnergyRegenPerTick;
 		}
-
-		if (unitsPerTick <= 0) return 0f;
-
-		// 100 units = 1 energy point
-		float ticksPerPoint = 100f / unitsPerTick;
-		long msPerPoint = (long)(ticksPerPoint * 600);
-
-		if (msPerPoint <= 0) return 0f;
-		long elapsed = System.currentTimeMillis() - lastEnergyChangeTimeForProgress;
-		float progress = (elapsed % msPerPoint) / (float) msPerPoint;
-
-		return progress;
+		
+		if (unitsPerTick <= 0) return 2500f;
+		// 1% of energy is 100 units.
+		return (100f / unitsPerTick) * 600f;
 	}
 
-	private int calculateGracefulBonus()
+	private void updatePulserProgress(boolean running, float currentEnergyPercent)
 	{
-		ItemContainer equipment = client.getItemContainer(InventoryID.EQUIPMENT);
-		if (equipment == null) return 0;
-
-		int bonus = 0;
-		int pieces = 0;
-		Item[] items = equipment.getItems();
-
-		int[] slots = {0, 1, 4, 7, 9, 10}; // HEAD, CAPE, BODY, LEGS, HANDS, BOOTS
-		int[] pieceBonuses = {3, 4, 4, 5, 2, 2};
-
-		for (int i = 0; i < slots.length; i++)
+		long now = System.currentTimeMillis();
+		if (lastPulseFrameTime == 0)
 		{
-			int slot = slots[i];
-			if (slot < items.length && items[slot] != null)
+			lastPulseFrameTime = now;
+			return;
+		}
+
+		long deltaTime = now - lastPulseFrameTime;
+		lastPulseFrameTime = now;
+
+		if (running)
+		{
+			nextHighestRunEnergyMark = 0;
+			if (currentEnergyPercent <= 0)
 			{
-				String name = itemManager.getItemComposition(items[slot].getId()).getName();
-				if (name != null && name.toLowerCase().contains("graceful"))
-				{
-					bonus += pieceBonuses[i];
-					pieces++;
-				}
+				pulserProgress = 0;
+				return;
+			}
+
+			currentPulseDuration = calculateExpectedDuration(true);
+			pulserProgress += (float) deltaTime / currentPulseDuration;
+			if (pulserProgress >= 1.0f)
+			{
+				pulserProgress -= (int) pulserProgress;
 			}
 		}
-		if (pieces == 6) bonus = 30;
-		return bonus;
+		else
+		{
+			int energy = client.getEnergy();
+			if (energy >= 10000)
+			{
+				pulserProgress = 0;
+				nextHighestRunEnergyMark = 0;
+				return;
+			}
+
+			if (energy >= nextHighestRunEnergyMark || (lastEnergy != -1 && energy / 100 > lastEnergy / 100))
+			{
+				nextHighestRunEnergyMark = ((energy + 99) / 100) * 100;
+				int agility = client.getBoostedSkillLevel(Skill.AGILITY);
+				int boost = getGracefulRecoveryBoost();
+				double rawRegen = Math.floor((1 + (boost / 100.0d)) * (Math.floor(agility / 10.0d) + 15));
+
+				ticksToRunEnergyRegen = (int) Math.ceil((nextHighestRunEnergyMark - energy) / rawRegen);
+				millisecondsToRunEnergyRegen = ticksToRunEnergyRegen * 600L;
+				millisecondsSinceRunEnergyRegen = 0;
+			}
+
+			if (millisecondsToRunEnergyRegen > 0)
+			{
+				millisecondsSinceRunEnergyRegen += deltaTime;
+				pulserProgress = Math.min(1.0f, (float) millisecondsSinceRunEnergyRegen / millisecondsToRunEnergyRegen);
+			}
+			else
+			{
+				pulserProgress = 0;
+			}
+		}
 	}
 
 	private boolean isAnyPrayerActive()
@@ -486,38 +567,20 @@ public class HeroHudOverlay extends Overlay
 			}
 		}
 
-		float outerScale = 1.0f + ((maxLayers - 1) * 0.4f) + 0.12f;
+		float outerScale = 1.0f + ((maxLayers - 1) * 0.4f) + 0.18f;
 		float outerSize = size * outerScale;
 		float ocx = x - outerSize / 2f, ocy = y - outerSize / 2f;
 
 		boolean showPulser = isRunning ? config.staminaShowDepletionPulser() : config.staminaShowRecoveryPulser();
 		if (energyChangeProgress > 0 && showPulser)
 		{
-            Color circlingColor = isRunning
-                    ? new Color(255, 60, 0, 180)
-                    : brighten(color, 2.8f);
+			Color circlingColor = isRunning ? new Color(255, 60, 0, 180) : color.brighter();
 			graphics.setColor(circlingColor);
 			graphics.setStroke(new BasicStroke(borderThick + 0.5f, BasicStroke.CAP_BUTT, BasicStroke.JOIN_ROUND));
-			graphics.draw(new Arc2D.Float(ocx, ocy, outerSize, outerSize, 90, -360 * energyChangeProgress, Arc2D.OPEN));
+			float extent = isRunning ? 360 * energyChangeProgress : -360 * energyChangeProgress;
+			graphics.draw(new Arc2D.Float(ocx, ocy, outerSize, outerSize, 90, extent, Arc2D.OPEN));
 		}
 	}
-
-    private Color brighten(Color c, float factor)
-    {
-        float[] hsb = Color.RGBtoHSB(c.getRed(), c.getGreen(), c.getBlue(), null);
-
-        // multiply brightness once by your factor
-        hsb[2] = Math.min(1.0f, hsb[2] * factor);
-
-        int rgb = Color.HSBtoRGB(hsb[0], hsb[1], hsb[2]);
-
-        return new Color(
-                (rgb >> 16) & 0xFF,
-                (rgb >> 8) & 0xFF,
-                rgb & 0xFF,
-                c.getAlpha()
-        );
-    }
 
 	private void renderHUD(Graphics2D graphics, Player player, float percent, Style style, Color color, int opacity, Color bgColor, int bgOpacity, int baseSize, int offsetX, int offsetY, float scaleFactor, int varbit, float alpha, String text, boolean showBorder, int borderThick, int wheelThick)
 	{
