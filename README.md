@@ -36,7 +36,7 @@ By anchoring visual indicators to the player model, HeroHud offers an alternativ
 
 ![HeroHud Settings](https://i.imgur.com/UfbfaSZ.png)
 
-### Customize your style
+### Customize your style (WIP)
 
 ![HeroHud Custom](https://imgur.com/NY2txc2.png)
 
