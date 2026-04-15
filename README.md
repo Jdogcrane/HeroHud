@@ -1,6 +1,7 @@
 # HeroHud
 
-HeroHud is a RuneLite plugin that provides a customizable, integrated Heads-Up Display (HUD) for tracking character statistics. By anchoring visual indicators to the player model, HeroHud offers an alternative to fixed interface elements, allowing players to monitor vital stats while focusing on gameplay.
+HeroHud is a RuneLite plugin that provides a customizable, integrated ingame indicators for tracking character vitals. 
+By anchoring visual indicators to the player model, HeroHud offers an alternative to fixed overlay interface elements, allowing players to monitor vital in a subtle and immersive way while focusing on gameplay.
 
 ---
 
@@ -25,12 +26,19 @@ HeroHud is a RuneLite plugin that provides a customizable, integrated Heads-Up D
 ## Visual Overviews
 
 ### Feature in Action
-<!-- Placeholder for gameplay screenshot/GIF showing the HUD anchored to the player -->
-![HeroHud Gameplay Placeholder](https://via.placeholder.com/800x450?text=Gameplay+Demonstration+Placeholder)
+
+![HeroHud Gameplay Placeholder](https://imgur.com/i4Gr5gE.gif)
+
+### Contextually Subtle UI
+![HeroHud Gameplay Placeholder](https://imgur.com/y3akXkk.gif)
 
 ### Configuration Options
-<!-- Placeholder for settings panel screenshot -->
-![HeroHud Settings Placeholder](https://via.placeholder.com/300x600?text=Settings+Panel+Placeholder)
+
+![HeroHud Settings](https://i.imgur.com/UfbfaSZ.png)
+
+### Customize your style
+
+![HeroHud Custom](https://imgur.com/NY2txc2.png)
 
 ---
 

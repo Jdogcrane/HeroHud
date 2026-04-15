@@ -53,17 +53,17 @@ public interface HeroHudConfig extends Config
 
 	@ConfigItem(keyName = "staminaMinThreshold", name = "Min Show Threshold", description = "Hide if stamina is BELOW this value", position = 6, section = staminaSection)
 	@Range(min = 0, max = 100)
-	default int staminaMinThreshold() { return 10; }
+	default int staminaMinThreshold() { return 0; }
 
 	@ConfigItem(keyName = "staminaMaxThreshold", name = "Max Show Threshold", description = "Hide if stamina is ABOVE this value", position = 7, section = staminaSection)
 	@Range(min = 1, max = 100)
-	default int staminaMaxThreshold() { return 99; }
+	default int staminaMaxThreshold() { return 98; }
 
 	@ConfigItem(keyName = "staminaEffectiveStamina", name = "Show Effective Stamina", description = "Factors in weight and agility for the wheel layers", position = 8, section = staminaSection)
 	default boolean staminaEffectiveStamina() { return false; }
 
 	@ConfigItem(keyName = "staminaDynamicColor", name = "Dynamic Coloring", description = "Hue shifts as stamina is used", position = 9, section = staminaSection)
-	default boolean staminaDynamicColor() { return false; }
+	default boolean staminaDynamicColor() { return true; }
 
 	@ConfigItem(keyName = "staminaShowRecoveryPulser", name = "Show Recovery Pulser", description = "Show the circling indicator when recovering stamina", position = 10, section = staminaSection)
 	default boolean staminaShowRecoveryPulser() { return true; }
@@ -75,11 +75,11 @@ public interface HeroHudConfig extends Config
 	default boolean staminaShowRecoveryHidden() { return true; }
 
 	@ConfigItem(keyName = "staminaRecoveryStyle", name = "Recovery Style", description = "", position = 13, section = staminaSection)
-	default RecoveryStyle staminaRecoveryStyle() { return RecoveryStyle.SPHERE; }
+	default RecoveryStyle staminaRecoveryStyle() { return RecoveryStyle.PIE_SPINNER; }
 
 	@ConfigItem(keyName = "staminaRecoveryScale", name = "Recovery Scale", description = "Adjust the size of the small recovery indicator", position = 14, section = staminaSection)
 	@Range(min = 1, max = 100)
-	default int staminaRecoveryScale() { return 40; }
+	default int staminaRecoveryScale() { return 60; }
 
 	@ConfigItem(keyName = "staminaRecoveryFade", name = "Recovery Fade Opacity", description = "Opacity (0-255) to fade to after stop running", position = 15, section = staminaSection)
 	@Range(max = 255)
@@ -262,7 +262,7 @@ public interface HeroHudConfig extends Config
 
 	@ConfigItem(keyName = "prayerSize", name = "Size", description = "", position = 20, section = prayerSection)
 	@Range(min = 10, max = 150)
-	default int prayerSize() { return 10; }
+	default int prayerSize() { return 13; }
 
 	@ConfigItem(keyName = "prayerAnchorX", name = "Anchor X Override", description = "", position = 21, section = prayerSection)
 	@Range(min = -300, max = 300)
