@@ -24,16 +24,14 @@ By anchoring visual indicators to the player model, HeroHud offers an alternativ
 ---
 
 ## Visual Overviews
-![HeroHud](https://github.com/user-attachments/assets/1cea28fa-f66e-481d-8d6a-70cfe9693443)
 
 
 ### Feature in Action
-![java_hBs4mU07Bw](https://github.com/user-attachments/assets/f898c640-f89e-4575-aa5e-751179fd762e)
+![HeroHud](https://github.com/user-attachments/assets/1cea28fa-f66e-481d-8d6a-70cfe9693443)
 
-![HeroHud Gameplay Placeholder](https://imgur.com/i4Gr5gE.gif)
 
 ### Contextually Subtle UI
-![HeroHud Gameplay Placeholder](https://imgur.com/y3akXkk.gif)
+![java_hBs4mU07Bw](https://github.com/user-attachments/assets/f898c640-f89e-4575-aa5e-751179fd762e)
 
 ### Configuration Options
 
