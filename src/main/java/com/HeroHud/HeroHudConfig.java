@@ -31,6 +31,13 @@ public interface HeroHudConfig extends Config
 	)
 	String prayerSection = "prayerSection";
 
+	@ConfigSection(
+		name = "Debug Settings",
+		description = "Artificially override values for testing",
+		position = 3
+	)
+	String debugSection = "debugSection";
+
 	// --- Stamina ---
 	@ConfigItem(keyName = "showStamina", name = "Show Stamina", description = "", position = 0, section = staminaSection)
 	default boolean showStamina() { return true; }
@@ -44,8 +51,9 @@ public interface HeroHudConfig extends Config
 	@ConfigItem(keyName = "staminaVisibilityMode", name = "Visibility Mode", description = "Visibility overrides", position = 3, section = staminaSection)
 	default VisibilityMode staminaVisibilityMode() { return VisibilityMode.UNSET; }
 
-	@ConfigItem(keyName = "staminaHideWalking", name = "Hide When Walking", description = "Only show when stamina is actively decreasing (running)", position = 4, section = staminaSection)
-	default boolean staminaHideWalking() { return true; }
+	@ConfigItem(keyName = "staminaHideWalkingTimer", name = "Hide after walking seconds (s)", description = "How many seconds to stay visible after you stop running. (-1 to disable, 0 to hide immediately)", position = 4, section = staminaSection)
+	@Range(min = -1, max = 3600)
+	default int staminaHideWalkingTimer() { return 2; }
 
 	@ConfigItem(keyName = "staminaInactivityTimer", name = "Inactivity Timer (s)", description = "Fade out after X seconds of no change (0 to disable)", position = 5, section = staminaSection)
 	@Range(min = 0, max = 60)
@@ -71,19 +79,19 @@ public interface HeroHudConfig extends Config
 	@ConfigItem(keyName = "staminaShowDepletionPulser", name = "Show Depletion Pulser", description = "Show the circling indicator when losing stamina", position = 11, section = staminaSection)
 	default boolean staminaShowDepletionPulser() { return true; }
 
-	@ConfigItem(keyName = "staminaShowRecoveryHidden", name = "Show recovery when hidden", description = "Shows the recovery if they are recovering even when the stat is hidden", position = 12, section = staminaSection)
-	default boolean staminaShowRecoveryHidden() { return true; }
+	@ConfigItem(keyName = "staminaShowMinimizedHidden", name = "Show minimized when hidden", description = "Shows the minimized HUD if they are recovering even when the stat is hidden", position = 12, section = staminaSection)
+	default boolean staminaShowMinimizedHidden() { return true; }
 
-	@ConfigItem(keyName = "staminaRecoveryStyle", name = "Recovery Style", description = "", position = 13, section = staminaSection)
-	default RecoveryStyle staminaRecoveryStyle() { return RecoveryStyle.PIE_SPINNER; }
+	@ConfigItem(keyName = "staminaMinimizedStyle", name = "Minimized Style", description = "", position = 13, section = staminaSection)
+	default MinimizedStyle staminaMinimizedStyle() { return MinimizedStyle.PIE_SPINNER; }
 
-	@ConfigItem(keyName = "staminaRecoveryScale", name = "Recovery Scale", description = "Adjust the size of the small recovery indicator", position = 14, section = staminaSection)
+	@ConfigItem(keyName = "staminaMinimizedScale", name = "Minimized Scale", description = "Adjust the size of the minimized indicator", position = 14, section = staminaSection)
 	@Range(min = 1, max = 100)
-	default int staminaRecoveryScale() { return 60; }
+	default int staminaMinimizedScale() { return 60; }
 
-	@ConfigItem(keyName = "staminaRecoveryFade", name = "Recovery Fade Opacity", description = "Opacity (0-255) to fade to after stop running", position = 15, section = staminaSection)
+	@ConfigItem(keyName = "staminaMinimizedFade", name = "Minimized Fade Opacity", description = "Opacity (0-255) to fade to after stop running", position = 15, section = staminaSection)
 	@Range(max = 255)
-	default int staminaRecoveryFade() { return 50; }
+	default int staminaMinimizedFade() { return 50; }
 
 	@ConfigItem(keyName = "staminaShowValue", name = "Show Value", description = "Shows the number", position = 16, section = staminaSection)
 	default boolean staminaShowValue() { return false; }
@@ -141,8 +149,9 @@ public interface HeroHudConfig extends Config
 	@ConfigItem(keyName = "healthOnlyCombat", name = "Only In Combat", description = "", position = 4, section = healthSection)
 	default boolean healthOnlyCombat() { return true; }
 
-	@ConfigItem(keyName = "healthHideWalking", name = "Hide When Walking", description = "Only show when running", position = 5, section = healthSection)
-	default boolean healthHideWalking() { return false; }
+	@ConfigItem(keyName = "healthHideWalkingTimer", name = "Minimize after walking(s)", description = "How many seconds to stay visible after you stop running. Set to -1 to never hide.", position = 5, section = healthSection)
+	@Range(min = -1, max = 3600)
+	default int healthHideWalkingTimer() { return 2; }
 
 	@ConfigItem(keyName = "healthInactivityTimer", name = "Inactivity Timer (s)", description = "", position = 6, section = healthSection)
 	@Range(min = 0, max = 60)
@@ -214,8 +223,9 @@ public interface HeroHudConfig extends Config
 	@ConfigItem(keyName = "prayerOnlyActive", name = "Only When Active", description = "Only show when a prayer is turned on", position = 5, section = prayerSection)
 	default boolean prayerOnlyActive() { return true; }
 
-	@ConfigItem(keyName = "prayerHideWalking", name = "Hide When Walking", description = "Only show when running", position = 6, section = prayerSection)
-	default boolean prayerHideWalking() { return false; }
+	@ConfigItem(keyName = "prayerHideWalkingTimer", name = "Hide after walking seconds (s)", description = "How many seconds to stay visible after you stop running. Set to -1 to never hide.", position = 6, section = prayerSection)
+	@Range(min = -1, max = 3600)
+	default int prayerHideWalkingTimer() { return -1; }
 
 	@ConfigItem(keyName = "prayerInactivityTimer", name = "Inactivity Timer (s)", description = "", position = 7, section = prayerSection)
 	@Range(min = 0, max = 60)
@@ -271,6 +281,35 @@ public interface HeroHudConfig extends Config
 	@ConfigItem(keyName = "prayerAnchorY", name = "Anchor Y Override", description = "", position = 22, section = prayerSection)
 	@Range(min = -300, max = 300)
 	default int prayerAnchorY() { return 0; }
+
+	// --- Debug ---
+	@ConfigItem(keyName = "debugEnabled", name = "Enable Debug Overrides", description = "Use the values below instead of actual game state", position = 0, section = debugSection)
+	default boolean debugEnabled() { return false; }
+
+	@ConfigItem(keyName = "debugEnergy", name = "Debug Energy %", description = "Set the current energy for testing visuals", position = 1, section = debugSection)
+	@Range(min = 0, max = 100)
+	default int debugEnergy() { return 100; }
+
+	@ConfigItem(keyName = "debugWeight", name = "Debug Weight", description = "", position = 2, section = debugSection)
+	@Range(min = -50, max = 200)
+	default int debugWeight() { return 0; }
+
+	@ConfigItem(keyName = "debugAgility", name = "Debug Agility", description = "", position = 3, section = debugSection)
+	@Range(min = 1, max = 120)
+	default int debugAgility() { return 1; }
+
+	@ConfigItem(keyName = "debugGraceful", name = "Debug Graceful Boost %", description = "Sum of graceful piece boosts + 10 for full set", position = 4, section = debugSection)
+	@Range(min = 0, max = 30)
+	default int debugGraceful() { return 0; }
+
+	@ConfigItem(keyName = "debugStaminaPot", name = "Debug Stamina Effect", description = "Artificially enable stamina potion effect", position = 5, section = debugSection)
+	default boolean debugStaminaPot() { return false; }
+
+	@ConfigItem(keyName = "debugEnduranceRing", name = "Debug Ring of Endurance", description = "Artificially enable Ring of Endurance passive", position = 6, section = debugSection)
+	default boolean debugEnduranceRing() { return false; }
+
+	@ConfigItem(keyName = "debugRunning", name = "Debug Is Running", description = "Force the HUD into 'running' state for depletion testing", position = 7, section = debugSection)
+	default boolean debugRunning() { return false; }
 
 	// --- Global ---
 	@ConfigItem(keyName = "relativeScalingSlider", name = "Relative Scaling strength", description = "Syncs zooming for all elements", position = 23)

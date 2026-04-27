@@ -5,7 +5,7 @@ import lombok.Getter;
 
 @Getter
 @AllArgsConstructor
-public enum RecoveryStyle
+public enum MinimizedStyle
 {
 	SPHERE("Small Sphere"),
 	PIE_SPINNER("Pie & Spinner"),
