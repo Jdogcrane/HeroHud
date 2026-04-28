@@ -1,14 +1,13 @@
 # HeroHud
 
-HeroHud is a RuneLite plugin that provides a customizable, integrated ingame indicators for tracking character vitals. 
-By anchoring visual indicators to the player model, HeroHud offers an alternative to fixed overlay interface elements, allowing players to monitor vital in a subtle and immersive way while focusing on gameplay.
+HeroHud is a minimalistic in-game indicator for stamina and prayer.
 
 ---
 
 ## Features
 
-### Stamina Tracking
-- **Effective Energy Calculation**: Optionally factors in character weight and Agility levels to display "effective" stamina layers.
+### Stamina Tracking Settings
+- **Effective Energy Calculation**: Factors in character weight and Agility levels to display "effective" stamina with extra layers/wheels.
 - **Activity Indicators**: Integrated pulsers visualize active energy depletion while running or recovery while resting.
 - **Selective Visibility**: Context-aware display options allow the HUD to appear only when running or during specific energy thresholds.
 
