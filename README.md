@@ -6,14 +6,14 @@ HeroHud is a minimalistic in-game indicator for stamina and prayer.
 
 ## Features
 
-### Stamina Tracking Settings
+### Stamina Tracking
 - **Effective Energy Calculation**: Factors in character weight and Agility levels to display "effective" stamina with extra layers/wheels.
 - **Activity Indicators**: Integrated pulsers visualize active energy depletion while running or recovery while resting.
-- **Selective Visibility**: Context-aware display options allow the HUD to appear only when running or during specific energy thresholds.
+- **Selective Visibility**: Context-aware display options allow the HUD to appear during specific contexts or during specific energy thresholds.
 
 ### Health and Prayer Modules
 - Dedicated Hitpoints and Prayer tracking with independent configuration.
-- Support for multiple visualization styles including Wheels, Bars, Pie Charts, and Liquid Orbs.
+- Support for multiple visualization styles, including Wheels, Bars, Pie Charts, and Liquid Orbs.
 
 ### Dynamic Visuals
 - **Hue-Shifting**: Optional dynamic coloring that transitions from user-defined colors to yellow, orange, and red as stats deplete, while maintaining consistent brightness.
